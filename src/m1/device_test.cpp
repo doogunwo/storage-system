@@ -1,4 +1,5 @@
 
+
 #include <iostream>
 #include <libnvme.h>
 #include <cstring>
@@ -269,19 +270,15 @@ int ss_nvme_device_write(int fd, uint32_t nsid, uint64_t slba, uint16_t numbers,
     if( ret < 0){
         return ret;
     }
-
     return 0;
 }
 
 
 int ss_zns_device_zone_reset(int fd, uint32_t nsid, uint64_t slba) {
 
-    int ret = nvme_ctrl_reset(fd);
-    if(ret<0){
-        return ret;
-    }
-
-    return ioctl(fd, NVME_IOCTL_RESET);
+	int ret;
+	ret = nvme_zns_mgmt_send(fd,nsid,slba,1,NVME_ZNS_ZSA_RESET,0,0);
+	return ret;	 
 
 }
 
@@ -291,39 +288,27 @@ int ss_zns_device_zone_append(int fd, uint32_t nsid, uint64_t zslba, int numbers
 {
 	int ret;
 	__u64 written_slba_value;
-
-	ret = nvme_zns_append(fd, nsid, zslba, numbers-1, 0, 0, 0, 0, 0, buffer, buf_size, NULL, &written_slba_value);
-
-	if(ret < 0 ) {
-		fprintf(stderr, "NVMe append failed: %s\n", strerror(-ret));
+	ret = nvme_zns_append(fd, nsid, zslba, numbers-1, 0, 0, 0, 0,  buf_size, buffer,0, NULL, &written_slba_value);
+	if(ret < 0 ){
+		fprintf(stderr, "NVMe append failed : %s\n", strerror(-ret));
 		return ret;
 	}
-
+	
+	*written_slba = written_slba_value;
+	
 	return ret;
-}
+	
+}//returned_slba
 
 void update_lba(uint64_t &write_lba, const uint32_t lba_size, const int count){
-
-	if(count < 0 || lba_size == 0 ){
-		std::cerr << "Error : Invalid count or LBA size. "<< std::endl;
-		return ;	
-	}
-
-	// 버퍼 오버플로우 방지를 위한 체크
-    	if (UINT64_MAX - write_lba < static_cast<uint64_t>(lba_size) * count) {
-        	std::cerr << "Error: Potential buffer overflow detected." << std::endl;
-        	return;
-	}
-	
-	write_lba =  write_lba + static_cast<uint64_t>(lba_size) * count;
-	
-}
+	write_lba += count;
+}//write_lba
 
 
 // see 5.15.2.2 Identify Controller data structure (CNS 01h)
 uint64_t get_mdts_size() {
 	uint64_t mdts_size = 512 * 1024;
-	return mdts_size;
+	return mdts_size--;
 }
 
 // g++ -o device_test device_test.cpp -L/path/to/library -lnvme 
